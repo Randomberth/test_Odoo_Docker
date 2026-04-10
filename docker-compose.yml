@@ -1,0 +1,58 @@
+services:
+  odoo:
+    image: odoo:${ODOO_VERSION:-19.0}
+    container_name: ${ODOO_CONTAINER:-odoo_app}
+    user: "0:0"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ODOO_PORT:-8069}:8069"
+    environment:
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-odoo}
+      - DB_PASSWORD=${DB_PASSWORD:-myodoo2024}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin12345}
+      - DATABASE=${DATABASE_NAME:-postgres}
+    volumes:
+      - odoo_data:/var/lib/odoo
+      # No montamos config, el entrypoint lo genera
+      - ./addons:/mnt/extra-addons:rw
+      - ./logs:/var/log/odoo
+      - ./init/entrypoint.sh:/entrypoint-custom.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint-custom.sh"]
+    command: ["odoo"]
+    networks:
+      - odoo_network
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: ${DB_CONTAINER:-odoo_db}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-odoo} -d ${POSTGRES_DB:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_USER=${DB_USER:-odoo}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-myodoo2024}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/pgdata
+    networks:
+      - odoo_network
+
+volumes:
+  odoo_data:
+    name: ${COMPOSE_PROJECT_NAME:-odoo}_data
+  postgres_data:
+    name: ${COMPOSE_PROJECT_NAME:-odoo}_db_data
+
+networks:
+  odoo_network:
+    name: ${COMPOSE_PROJECT_NAME:-odoo}_network
+    driver: bridge
